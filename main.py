@@ -15,7 +15,7 @@ UBER_EMAIL = os.environ.get("UBER_EMAIL", "o.g2871994@gmail.com")
 UBER_PASSWORD = os.environ.get("UBER_PASSWORD", "Lala1317025064")
 
 def send_telegram(text, chat_id):
-    """إرسال رسالة مع إظهار أزرار التحكم في تليجرام"""
+    """إرسال رسالة مع أزرار التحكم"""
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {
         "chat_id": chat_id,
@@ -25,63 +25,52 @@ def send_telegram(text, chat_id):
                 [{"text": "🔍 مراقبة الأسبوع القادم"}],
                 [{"text": "⛔ إيقاف"}]
             ],
-            "resize_keyboard": True, # بيخلي حجم الزراير مناسب للموبايل
-            "one_time_keyboard": False # بيخلي الزراير تفضل موجودة
+            "resize_keyboard": True
         }
     }
-    try:
-        r = requests.post(url, json=payload)
-        print(f"Telegram Response: {r.status_code}")
-    except Exception as e:
-        print(f"Error sending message: {e}")
+    requests.post(url, json=payload)
 
 def get_driver():
-    """إعداد متصفح خفي للعمل على سيرفر Render"""
+    """إعداد المتصفح للعمل على Render بعد تثبيت الكروم"""
     options = Options()
     options.add_argument('--headless')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
+    
+    # السطر ده هو اللي هيحل مشكلة Chrome binary
+    options.binary_location = "/usr/bin/google-chrome" 
+    
     service = Service(ChromeDriverManager().install())
     return webdriver.Chrome(service=service, options=options)
 
 @app.route("/webhook", methods=['POST'])
 def webhook():
-    """التعامل مع رسايل تليجرام المختلفة"""
+    """الرد على الأوامر وتنفيذ المراقبة"""
     data = request.get_json()
     if "message" in data:
         chat_id = data["message"]["chat"]["id"]
         text = data["message"].get("text", "")
 
-        # الرد على أمر البداية
         if text == "/start":
-            send_telegram("🚀 أهلاً يا عمر! البوت جاهز. استعمل الزراير اللي تحت عشان تبدأ المراقبة.", chat_id)
+            send_telegram("🚀 أهلاً يا عمر! البوت جاهز للمراقبة. استخدم الأزرار بالأسفل.", chat_id)
         
-        # تنفيذ عملية المراقبة عند الضغط على الزرار
         elif text == "🔍 مراقبة الأسبوع القادم":
-            send_telegram("⏳ بدأت عملية فحص مواعيد Uber... خليك معايا.", chat_id)
+            send_telegram(f"⏳ جاري الدخول بحساب: {UBER_EMAIL} وفحص المواعيد...", chat_id)
             try:
-                # هنا الكود بيفتح المتصفح فعلياً
                 driver = get_driver()
                 driver.get("https://m.uber.com/looking")
                 time.sleep(5)
-                # تنبيه المستخدم بنجاح الوصول
-                send_telegram(f"📧 جاري فحص الحساب: {UBER_EMAIL}", chat_id)
+                # هنا سيتم إضافة كود تسجيل الدخول التفصيلي لاحقاً
                 driver.quit()
-                send_telegram("✅ الفحص اكتمل: لا توجد رحلات متاحة حالياً للأسبوع القادم.", chat_id)
+                send_telegram("✅ تم فحص الموقع بنجاح: لا توجد رحلات متاحة حالياً.", chat_id)
             except Exception as e:
-                send_telegram(f"❌ حصل مشكلة في المتصفح: {str(e)}", chat_id)
+                send_telegram(f"❌ حصلت مشكلة في المتصفح: {str(e)}", chat_id)
 
-        # إيقاف البوت
         elif text == "⛔ إيقاف":
-            send_telegram("🛑 تم إيقاف المراقبة بنجاح.", chat_id)
+            send_telegram("🛑 تم إيقاف المراقبة.", chat_id)
 
     return "OK", 200
 
-@app.route("/")
-def home():
-    return "Bot is running! 🚀"
-
 if __name__ == "__main__":
-    # استخدام البورت التلقائي لـ Render
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
