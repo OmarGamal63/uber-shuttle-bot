@@ -13,20 +13,16 @@ app = Flask(__name__)
 TELEGRAM_TOKEN = "8595696719:AAGDXsAvQ3vsP9cg5irIn1DI5kzBWaPESKq"
 
 def send_telegram(text, chat_id):
-    """إرسال رد مباشر وتنبيه في الـ Logs لحالة الإرسال"""
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": chat_id,
-        "text": text,
-        "reply_markup": {
-            "keyboard": [[{"text": "🔍 مراقبة الأسبوع القادم"}], [{"text": "⛔ إيقاف"}]],
-            "resize_keyboard": True
-        }
-    }
+    """إرسال رد مباشر باستخدام الرابط لضمان تخطي أي مشاكل في المكتبات"""
+    # لاحظ حرف q الصغير في الآخر
+    token = "8595696719:AAGDXsAvQ3vsP9cg5irIn1DI5kzBWaPESKq"
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    payload = {"chat_id": chat_id, "text": text}
+    
     try:
-        response = requests.post(url, json=payload)
-        # السطر ده هيخلينا نشوف في الـ Logs لو تليجرام رفض الرسالة
-        print(f"Telegram Status: {response.status_code} - {response.text}")
+        # هنا بنجبر السيرفر يطبع النتيجة عشان نشوفها في الـ Logs
+        r = requests.post(url, json=payload, timeout=10)
+        print(f"Status: {r.status_code}, Response: {r.text}")
     except Exception as e:
         print(f"Send Error: {e}")
 
@@ -74,3 +70,4 @@ if __name__ == "__main__":
     # استخدام بورت Render التلقائي
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
+
