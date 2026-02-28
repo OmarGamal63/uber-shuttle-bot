@@ -7,7 +7,7 @@ from twilio.twiml.messaging_response import MessagingResponse
 app = Flask(__name__)
 
 # الإعدادات الأساسية
-TARGET_TIME = "12:44"
+TARGET_TIME = "12:44 pm"
 
 def check_uber():
     # الرابط اللي جربناه واشتغل معاك
@@ -27,4 +27,5 @@ def webhook():
     return str(resp)
 
 if __name__ == "__main__":
+
     app.run(host='0.0.0.0', port=8080)
