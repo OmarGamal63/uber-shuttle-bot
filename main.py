@@ -10,12 +10,12 @@ from webdriver_manager.chrome import ChromeDriverManager
 app = Flask(__name__)
 
 # التوكن الصحيح مكتوب يدوياً لضمان الربط
-TELEGRAM_TOKEN = "8595696719:AAGDXsAvQ3vsP9cg5irIn1DI5kzBWaPESKq"
+TELEGRAM_TOKEN = "8595696719:AAGDXsAvQ3vsP9cg5irIn1DI5kzBWaPESKQ"
 
 def send_telegram(text, chat_id):
     """إرسال رد مباشر باستخدام الرابط لضمان تخطي أي مشاكل في المكتبات"""
     # لاحظ حرف q الصغير في الآخر
-    token = "8595696719:AAGDXsAvQ3vsP9cg5irIn1DI5kzBWaPESKq"
+    token = "8595696719:AAGDXsAvQ3vsP9cg5irIn1DI5kzBWaPESKQ"
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {"chat_id": chat_id, "text": text}
     
@@ -70,4 +70,5 @@ if __name__ == "__main__":
     # استخدام بورت Render التلقائي
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
+
 
