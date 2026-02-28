@@ -2,3 +2,4 @@ flask
 requests
 selenium
 webdriver-manager
+undetected-chromedriver
