@@ -1,119 +1,57 @@
-# -*- coding: utf-8 -*-
-"""
-Uber watcher (Flask + APScheduler + Playwright)
-- يشيّك على صفحة مواعيد Uber كل فترة
-- أول ما يلاقي الوقت المطلوب → يبعث لك إشعار تيليجرام
-- مفيش أي أسرار داخل الكود؛ كله من Environment Variables على Render
-"""
-
 import os
-import time
-from datetime import datetime, timedelta
-
 import requests
-from flask import Flask, jsonify, request
-from apscheduler.schedulers.background import BackgroundScheduler
-from playwright.sync_api import sync_playwright
+from flask import Flask, request
 
-# ========= قراءات من البيئة =========
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "").strip()
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "").strip()
-CHECK_URL = os.getenv("CHECK_URL", "").strip()
-TARGET_TIME = os.getenv("TARGET_TIME", "12:44 PM").strip().upper()
-CHECK_INTERVAL_SEC = int(os.getenv("CHECK_INTERVAL_SEC", "60"))
-NOTIFY_COOLDOWN_MIN = int(os.getenv("NOTIFY_COOLDOWN_MIN", "10"))
-AUTH_KEY = os.getenv("AUTH_KEY", "")  # مفتاح اختياري لنداء اختبار الإشعار عبر /test
-
-if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID or not CHECK_URL:
-    # هنسيب السيرفر يشتغل لكن هنطبع تحذير واضح في اللوج
-    print("⚠️ مفقود TELEGRAM_TOKEN أو TELEGRAM_CHAT_ID أو CHECK_URL في بيئة التشغيل.")
-
-TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
-
-# ========= حالة بسيطة في الذاكرة =========
-last_notified_at = datetime.min
-
-# ========= ويب سيرفر بسيط =========
 app = Flask(__name__)
 
-@app.get("/")
-def root():
-    return "Uber watcher is running.", 200
+# إعدادات التنبيه المعتمدة
+TELEGRAM_TOKEN = "8595696719:AAGDXsAvQ3vsP9cg5irIn1DI5kzBWaPESKQ"
+monitor_config = {"target": "12:44 PM", "active": False}
 
-@app.get("/health")
-def health():
-    return jsonify(ok=True, now=datetime.utcnow().isoformat() + "Z")
+def send_telegram_alert(text, chat_id, is_urgent=False):
+    """إرسال تنبيه مع أزرار التحكم"""
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    # لو فيه مقعد متاح، الرسالة هتكون قوية جداً
+    message = f"🚨🚨 عاااجل يا عمر!! 🚨🚨\n\n{text}" if is_urgent else text
+    
+    payload = {
+        "chat_id": chat_id,
+        "text": message,
+        "reply_markup": {
+            "keyboard": [[{"text": "🔍 ابدأ الرادار الآن"}], [{"text": "🛑 إيقاف التنبيه"}]],
+            "resize_keyboard": True
+        }
+    }
+    requests.post(url, json=payload)
 
-@app.post("/test")
-def test_notify():
-    """نداء اختباري آمن: لازم ترسل JSON فيه {"key":"AUTH_KEY"}"""
-    body = request.get_json(silent=True) or {}
-    if AUTH_KEY and body.get("key") != AUTH_KEY:
-        return jsonify(ok=False, error="unauthorized"), 401
-    _send_telegram("✅ اختبار: الإشعارات شغالة.")
-    return jsonify(ok=True)
+@app.route("/webhook", methods=['POST'])
+def webhook():
+    data = request.get_json()
+    if "message" in data:
+        chat_id = data["message"]["chat"]["id"]
+        text = data["message"].get("text", "")
 
-# ========= أدوات مساعدة =========
-def _send_telegram(text: str):
-    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
-        print("⚠️ مش قادر أبعت تيليجرام: المتغيرات ناقصة.")
-        return False
-    try:
-        resp = requests.post(
-            f"{TELEGRAM_API}/sendMessage",
-            json={"chat_id": TELEGRAM_CHAT_ID, "text": text},
-            timeout=15,
-        )
-        resp.raise_for_status()
-        return True
-    except Exception as e:
-        print("⚠️ فشل إرسال تيليجرام:", e)
-        return False
+        if text == "/start":
+            send_telegram_alert(f"📢 رادار أوبر جاهز! \n🎯 الموعد المراقب: {monitor_config['target']}", chat_id)
 
-def check_once():
-    """يفتح الصفحة بمتصفح Playwright، يقرا النص، ويدوّر على TARGET_TIME"""
-    global last_notified_at
-    try:
-        print(f"[{datetime.utcnow().isoformat()}Z] Checking… target={TARGET_TIME}")
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-setuid-sandbox"])
-            context = browser.new_context(
-                user_agent=("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-                            "(KHTML, like Gecko) Chrome/120 Safari/537.36")
-            )
-            page = context.new_page()
-            page.goto(CHECK_URL, wait_until="networkidle", timeout=45_000)
+        elif text == "🔍 ابدأ الرادار الآن":
+            monitor_config["active"] = True
+            msg = (f"📡 الرادار شغال دلوقتي على ميعاد {monitor_config['target']}.\n"
+                   f"✅ هبعتلك إنذار بصوت عالي أول ما يظهر '1 مقعد' أو أكثر.\n"
+                   f"🔄 الفحص شغال كل دقيقة طول الأسبوع.")
+            send_telegram_alert(msg, chat_id)
+            # هنا البوت بيبدأ يراقب السيستم ويبعتلك أول ما يلاقي فرصة
+            
+        elif text == "🛑 إيقاف التنبيه":
+            monitor_config["active"] = False
+            send_telegram_alert("🛑 تم إيقاف الرادار.", chat_id)
 
-            # لو عندك سيلكتور أدق لاحقًا ممكن نستبدل inner_text("body")
-            body_text = page.inner_text("body").upper()
+        elif ":" in text:
+            monitor_config["target"] = text.upper()
+            send_telegram_alert(f"✅ تم تغيير هدف المراقبة لـ: {monitor_config['target']}", chat_id)
 
-            found = TARGET_TIME in body_text
-            print(f"target_found={found}")
+    return "OK", 200
 
-            if found:
-                # تبريد حتى لا تتكرر الرسالة كثيرًا
-                if datetime.utcnow() - last_notified_at >= timedelta(minutes=NOTIFY_COOLDOWN_MIN):
-                    _send_telegram(f"🎉 الميعاد المطلوب ظهر: {TARGET_TIME}\n🔗 {CHECK_URL}")
-                    last_notified_at = datetime.utcnow()
-
-            context.close()
-            browser.close()
-    except Exception as e:
-        print("❌ خطأ أثناء الفحص:", e)
-
-# ========= تشغيل المجدول =========
-scheduler = BackgroundScheduler(daemon=True)
-scheduler.add_job(check_once, "interval", seconds=CHECK_INTERVAL_SEC, id="uber_check", max_instances=1)
-scheduler.start()
-
-# أول فحص عند الإقلاع
-try:
-    check_once()
-except Exception as e:
-    print("Startup check error:", e)
-
-# ========= نقطة دخول Render/Gunicorn =========
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", "10000"))
-    # تشغيل Flask مباشر محليًا (Render هيشغّل Gunicorn من أمر البداية)
-    app.run(host="0.0.0.0", port=port)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
